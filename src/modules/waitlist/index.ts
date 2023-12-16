@@ -1,12 +1,15 @@
 import { Elysia, t } from "elysia";
 
-import { authen, supabase } from "../../libs";
+import { supabase } from "../../libs";
+import { apiKey } from "../../plugins/apiKey";
+
 import { httpErrorDecorator } from "../../plugins/httpError";
 
 export const waitlist = (app: Elysia) =>
   app.group("/waitlist", (app) =>
     app
       .use(httpErrorDecorator)
+      .use(apiKey())
       .get(
         "/:id",
         async ({ params: { id }, HttpError }) => {

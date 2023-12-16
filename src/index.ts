@@ -1,4 +1,4 @@
-import { swagger } from "@elysiajs/swagger";
+import { swagger, ElysiaSwaggerConfig } from "@elysiajs/swagger";
 import { Elysia, t } from "elysia";
 import { serverTiming } from "@elysiajs/server-timing";
 import { ip } from "./plugins/ip";
@@ -12,10 +12,25 @@ const app = new Elysia()
   .use(httpError())
   .use(
     swagger({
+      autoDarkMode: true,
       documentation: {
         info: {
           title: "Linefor API",
           version: "0.1.0",
+        },
+        security: [
+          {
+            ApiKeyAuth: [],
+          },
+        ],
+        components: {
+          securitySchemes: {
+            ApiKeyAuth: {
+              type: "apiKey",
+              name: "x-linefor-key",
+              in: "header",
+            },
+          },
         },
         tags: [
           {
