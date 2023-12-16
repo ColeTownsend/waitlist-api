@@ -1,2 +1,2 @@
-export { authen } from './authen'
-export { supabase } from './supabase'
+export { authen } from "./authen";
+export { supabase } from "./supabase";

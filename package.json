@@ -3,13 +3,27 @@
   "version": "1.0.28",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --hot src/index.ts"
+    "dev": "bun run --hot src/index.ts",
+    "format": "bun biome format . --write && bun biome check . --apply-unsafe",
+    "types:supabase": "supabase gen types typescript --local > database.types.ts",
+    "supabase:start": "supabase start --ignore-health-check",
+    "supabase:stop": "supabase stop",
+    "supabase:studio": "open -a 'http://127.0.0.1:54323/project/default'",
+    "supabase:status": "supabase status",
+    "supabase:stop:backup": "supabase stop --backup",
+    "supabase:db:reset": "supabase db reset",
+    "typegen": "supabase gen types typescript --local > src/database.types.ts",
+    "test:db": "supabase test db",
+    "test:reset:db": "supabase db reset && supabase test db --debug"
   },
   "dependencies": {
-    "@elysiajs/cookie": "^0.3.0",
-    "@elysiajs/swagger": "^0.3.0",
-    "@supabase/supabase-js": "^2.10.0",
-    "elysia": "^0.3.1"
+    "@biomejs/biome": "1.2.2",
+    "@elysiajs/cookie": "latest",
+    "@elysiajs/server-timing": "^0.7.1",
+    "@elysiajs/swagger": "latest",
+    "@supabase/supabase-js": "latest",
+    "elysia": "latest",
+    "elysia-rate-limit": "^2.0.1"
   },
   "devDependencies": {
     "bun-types": "latest"
