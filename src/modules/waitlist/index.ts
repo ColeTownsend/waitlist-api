@@ -71,22 +71,23 @@ export const waitlist = (app: Elysia) =>
       .get(
         "/:id/confirm",
         async ({ params: { id }, query: { email }, HttpError }) => {
-          // get waitlist
-          // Find user by referral code
-          // Create new waitlist_signup
-          const { data: newSignup, error: signupError } = await supabase
-            .from("waitlist_signups")
+          // confirm user
+          const { data, error } = await supabase
+            .rpc("confirm_user_referral", {
+              p_email: email,
+              p_waitlist_id: id,
+            })
             .select()
-            .eq("email", email)
-            .limit(1)
             .maybeSingle();
 
-          if (signupError) {
-            console.error(signupError);
-            throw HttpError.Internal(signupError.message);
+          if (error) {
+            console.error(error);
+            throw HttpError.Internal(error.message);
           }
 
-          return newSignup;
+          return {
+            success: !error,
+          };
         },
         {
           query: t.Object({

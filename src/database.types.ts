@@ -242,6 +242,7 @@ export interface Database {
       waitlist_referrals: {
         Row: {
           confirmed: boolean
+          confirmed_at: string | null
           created_at: string
           id: string
           organization_id: number
@@ -251,6 +252,7 @@ export interface Database {
         }
         Insert: {
           confirmed?: boolean
+          confirmed_at?: string | null
           created_at?: string
           id?: string
           organization_id: number
@@ -260,6 +262,7 @@ export interface Database {
         }
         Update: {
           confirmed?: boolean
+          confirmed_at?: string | null
           created_at?: string
           id?: string
           organization_id?: number
@@ -435,6 +438,13 @@ export interface Database {
           membership_id: number
         }
         Returns: boolean
+      }
+      confirm_user_referral: {
+        Args: {
+          p_email: string
+          p_waitlist_id: string
+        }
+        Returns: undefined
       }
       create_new_organization: {
         Args: {

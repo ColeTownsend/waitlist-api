@@ -545,3 +545,41 @@ BEGIN
   RETURN result;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION confirm_user_referral(p_email text, p_waitlist_id uuid)
+RETURNS void AS $$
+DECLARE
+    referrer_id uuid;
+    points_to_add int;
+BEGIN
+    -- Update and confirm the waitlist_signup if not already confirmed
+    UPDATE waitlist_signups
+    SET confirmed = true, confirmed_at = NOW()
+    WHERE email = p_email AND waitlist_id = p_waitlist_id AND NOT confirmed;
+
+    -- Confirm the waitlist_referral and get the referrer's id, only if not already confirmed
+    WITH updated_referrals AS (
+        UPDATE waitlist_referrals
+        SET confirmed = true
+        WHERE referred_signup_id IN (
+            SELECT id FROM waitlist_signups WHERE email = p_email AND waitlist_id = p_waitlist_id
+        ) AND NOT confirmed
+        RETURNING referrer_user_id
+    )
+    SELECT referrer_user_id INTO referrer_id FROM updated_referrals LIMIT 1;
+
+    -- If a referral was updated, then update points
+    IF FOUND THEN
+        -- Get the points to add from waitlist_settings
+        SELECT (settings->>'points_per_confirmed_referral')::int INTO points_to_add
+        FROM waitlist_settings
+        WHERE waitlist_id = p_waitlist_id;
+
+        -- Update the referrer's points
+        UPDATE waitlist_signups
+        SET points = points + COALESCE(points_to_add, 0)
+        WHERE id = referrer_id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
