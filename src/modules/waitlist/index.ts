@@ -1,13 +1,15 @@
 import { Elysia, t } from "elysia";
 
 import { authen, supabase } from "../../libs";
+import { httpErrorDecorator } from "../../plugins/httpError";
 
 export const waitlist = (app: Elysia) =>
   app.group("/waitlist", (app) =>
     app
+      .use(httpErrorDecorator)
       .get(
         "/:id",
-        async ({ params: { id } }) => {
+        async ({ params: { id }, HttpError }) => {
           const { data, error } = await supabase
             .from("waitlists")
             .select("name, description, waitlist_signups(count), waitlist_referrals(count)")
@@ -16,7 +18,7 @@ export const waitlist = (app: Elysia) =>
             .maybeSingle();
 
           if (error) {
-            return error;
+            throw HttpError.BadRequest(error.message);
           }
 
           return {
@@ -32,22 +34,9 @@ export const waitlist = (app: Elysia) =>
       )
       .post(
         "/:id/join",
-        async ({ params: { id }, body }) => {
+        async ({ params: { id }, body, HttpError }) => {
           // get waitlist
-          // @todo – ideally can have this org id already...
-          const { data, error } = await supabase
-            .from("waitlists")
-            .select("organization_id")
-            .eq("id", id)
-            .limit(1)
-            .maybeSingle();
-
-          if (error) {
-            return error;
-          }
-
           // Find user by referral code
-
           // Create new waitlist_signup
           const { data: newSignup, error: signupError } = await supabase
             .rpc("create_waitlist_signup", {
@@ -61,7 +50,7 @@ export const waitlist = (app: Elysia) =>
 
           if (signupError) {
             console.error(signupError);
-            throw signupError;
+            throw HttpError.Internal(signupError.message);
           }
 
           return newSignup;
@@ -72,6 +61,38 @@ export const waitlist = (app: Elysia) =>
               format: "email",
             }),
             referral_code: t.Optional(t.String()),
+          }),
+          detail: {
+            tags: ["Authorized"],
+            description: "Create a waitlist",
+          },
+        },
+      )
+      .get(
+        "/:id/confirm",
+        async ({ params: { id }, query: { email }, HttpError }) => {
+          // get waitlist
+          // Find user by referral code
+          // Create new waitlist_signup
+          const { data: newSignup, error: signupError } = await supabase
+            .from("waitlist_signups")
+            .select()
+            .eq("email", email)
+            .limit(1)
+            .maybeSingle();
+
+          if (signupError) {
+            console.error(signupError);
+            throw HttpError.Internal(signupError.message);
+          }
+
+          return newSignup;
+        },
+        {
+          query: t.Object({
+            email: t.String({
+              format: "email",
+            }),
           }),
           detail: {
             tags: ["Authorized"],

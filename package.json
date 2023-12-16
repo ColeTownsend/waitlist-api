@@ -1,10 +1,12 @@
 {
-  "name": "elysia-supabase",
-  "version": "1.0.28",
+  "name": "linefor-api",
+  "version": "1.0.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --hot src/index.ts",
     "format": "bun biome format . --write && bun biome check . --apply-unsafe",
+    "build": "bun build src/index.ts",
+    "start": "NODE_ENV=production bun src/index.ts",
     "types:supabase": "supabase gen types typescript --local > database.types.ts",
     "supabase:start": "supabase start --ignore-health-check",
     "supabase:stop": "supabase stop",
@@ -23,6 +25,7 @@
     "@elysiajs/swagger": "latest",
     "@supabase/supabase-js": "latest",
     "elysia": "latest",
+    "elysia-helmet": "^1.0.1",
     "elysia-rate-limit": "^2.0.1"
   },
   "devDependencies": {

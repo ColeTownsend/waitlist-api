@@ -1,9 +1,9 @@
 FROM oven/bun:1
-WORKDIR /app
+WORKDIR /src
 COPY . .
 RUN bun install
 
 ARG PORT
 EXPOSE ${PORT:-3000}
 
-CMD ["bun", "server.ts"]
+CMD ["bun", "index.ts"]

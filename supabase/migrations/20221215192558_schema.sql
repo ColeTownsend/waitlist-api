@@ -167,23 +167,28 @@ begin
 end;
 $$;
 
-create or replace function create_new_waitlist (waitlist_name text, org_id bigint)
-  returns uuid
-  language PLPGSQL
-  security definer
-  as $$
-declare
-  new_waitlist uuid;
-begin
-  insert into waitlists ("name", "organization_id")
-    values (waitlist_name, org_id)
-  returning
-    id into new_waitlist;
-  insert into waitlist_settings (waitlist_id, organization_id)
-    values (new_waitlist, org_id);
-  return new_waitlist;
-end;
+CREATE OR REPLACE FUNCTION create_new_waitlist(waitlist_name text, org_id bigint)
+RETURNS uuid
+LANGUAGE PLPGSQL
+SECURITY DEFINER
+AS $$
+DECLARE
+    new_waitlist uuid;
+BEGIN
+    -- Insert into waitlists table and return the new id
+    INSERT INTO waitlists (name, organization_id)
+    VALUES (waitlist_name, org_id)
+    RETURNING id INTO new_waitlist; -- Correct use of RETURNING clause
+
+    -- Insert into waitlist_settings table
+    INSERT INTO waitlist_settings (waitlist_id, organization_id)
+    VALUES (new_waitlist, org_id);
+
+    -- Return the new waitlist id
+    RETURN new_waitlist;
+END;
 $$;
+
 
 create or replace function accept_invite_to_organization (invite_code text, invite_user_id uuid)
   returns json

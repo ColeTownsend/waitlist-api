@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 
 import { authen, supabase } from "../../../libs";
+import { httpErrorDecorator } from "../../../plugins/httpError";
 
 const SIZE = 50;
 
@@ -8,9 +9,10 @@ export const admin = (app: Elysia) =>
   app.group("/admin/waitlist", (app) =>
     app
       .use(authen)
+      .use(httpErrorDecorator)
       .get(
         "/:id",
-        async ({ params: { id } }) => {
+        async ({ params: { id }, HttpError }) => {
           const { data, error } = await supabase
             .from("waitlists")
             .select("*, waitlist_signups(count), waitlist_referrals(count)")
@@ -19,7 +21,7 @@ export const admin = (app: Elysia) =>
             .maybeSingle();
 
           if (error) {
-            return error;
+            throw HttpError.BadRequest(error.message);
           }
 
           return {
@@ -35,7 +37,7 @@ export const admin = (app: Elysia) =>
       )
       .get(
         "/:id/emails",
-        async ({ params: { id }, query: { page } }) => {
+        async ({ params: { id }, query: { page }, HttpError }) => {
           const limit = SIZE ? +SIZE : SIZE;
           const from = page ? (Number(page) - 1) * limit : 0;
           const to = page ? from + SIZE : SIZE;
@@ -49,7 +51,7 @@ export const admin = (app: Elysia) =>
             .range(from, to);
 
           if (error) {
-            return error;
+            throw HttpError.BadRequest(error.message);
           }
 
           return {
@@ -72,18 +74,19 @@ export const admin = (app: Elysia) =>
       )
       .post(
         "/create",
-        async ({ body }) => {
+        async ({ body, HttpError }) => {
           const { data, error } = await supabase
             .rpc("create_new_waitlist", {
               waitlist_name: body.name,
               org_id: body.org_id,
             })
-            .select("id")
+            .select()
             .limit(1)
             .maybeSingle();
 
           if (error) {
-            throw error;
+            console.error(error);
+            throw HttpError.BadRequest(error.message);
           }
 
           return data;
@@ -99,16 +102,67 @@ export const admin = (app: Elysia) =>
           },
         },
       )
+      .put(
+        "/:id",
+        async ({ params: { id }, body, HttpError }) => {
+          const { data, error } = await supabase
+            .from("waitlists")
+            .update(body)
+            .eq("id", id)
+            .select()
+            .limit(1)
+            .order("id", { ascending: false })
+            .maybeSingle();
+
+          if (error) {
+            console.error(error);
+            throw HttpError.BadRequest(error.message);
+          }
+
+          return {
+            data,
+            success: !!data,
+          };
+        },
+        {
+          body: t.Object({
+            name: t.String(),
+            description: t.String(),
+          }),
+          detail: {
+            description: "Delete waitlist by id",
+          },
+        },
+      )
+      .delete(
+        "/:id",
+        async ({ params: { id }, HttpError }) => {
+          const { error } = await supabase.from("waitlists").delete().eq("id", id);
+
+          if (error) {
+            throw HttpError.BadRequest(error.message);
+          }
+
+          return {
+            success: !error,
+          };
+        },
+        {
+          detail: {
+            description: "Delete waitlist by id",
+          },
+        },
+      )
       .get(
         "/:id/settings",
-        async ({ params: { id } }) => {
+        async ({ params: { id }, HttpError }) => {
           const { data, error } = await supabase
             .from("waitlist_settings")
             .select()
             .eq("waitlist_id", id);
 
           if (error) {
-            throw error;
+            throw HttpError.BadRequest(error.message);
           }
 
           return data;
@@ -122,14 +176,14 @@ export const admin = (app: Elysia) =>
       )
       .put(
         "/:id/settings",
-        async ({ body, params: { id } }) => {
+        async ({ body, params: { id }, HttpError }) => {
           const { data, error } = await supabase
             .from("waitlist_settings")
             .update(body)
             .eq("waitlist_id", id);
 
           if (error) {
-            throw error;
+            throw HttpError.BadRequest(error.message);
           }
 
           return data;

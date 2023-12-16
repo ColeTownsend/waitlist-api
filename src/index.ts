@@ -4,8 +4,11 @@ import { serverTiming } from "@elysiajs/server-timing";
 import { ip } from "./plugins/ip";
 import { admin, auth, waitlist } from "./modules";
 import { httpError } from "./plugins/httpError";
+import { helmet } from "elysia-helmet";
+import { rateLimit } from "elysia-rate-limit";
 
 const app = new Elysia()
+  .use(rateLimit())
   .use(httpError())
   .use(
     swagger({

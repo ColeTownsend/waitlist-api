@@ -451,6 +451,13 @@ export interface Database {
         }
         Returns: string
       }
+      create_new_waitlist_simple: {
+        Args: {
+          waitlist_name: string
+          org_id: number
+        }
+        Returns: string
+      }
       create_waitlist_signup: {
         Args: {
           p_waitlist_id: string
@@ -536,6 +543,10 @@ export interface Database {
           claim: string
           value: Json
         }
+        Returns: string
+      }
+      short_uuid: {
+        Args: Record<PropertyKey, never>
         Returns: string
       }
       transfer_organization: {
