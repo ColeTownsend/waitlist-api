@@ -1,10 +1,9 @@
-import { swagger, ElysiaSwaggerConfig } from "@elysiajs/swagger";
+import { swagger } from "@elysiajs/swagger";
 import { Elysia, t } from "elysia";
 import { serverTiming } from "@elysiajs/server-timing";
 import { ip } from "./plugins/ip";
 import { admin, auth, waitlist } from "./modules";
 import { httpError } from "./plugins/httpError";
-import { helmet } from "elysia-helmet";
 import { rateLimit } from "elysia-rate-limit";
 
 const app = new Elysia()
@@ -50,6 +49,6 @@ const app = new Elysia()
   .use(waitlist)
   .use(auth)
   .use(admin)
-  .listen(3000);
+  .listen(process.env.PORT || 3000);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
