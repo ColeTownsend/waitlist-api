@@ -14,7 +14,7 @@ const app = new Elysia()
       autoDarkMode: true,
       documentation: {
         info: {
-          title: "Linefor API",
+          title: "Early API",
           version: "0.1.0",
         },
         security: [
@@ -26,7 +26,7 @@ const app = new Elysia()
           securitySchemes: {
             ApiKeyAuth: {
               type: "apiKey",
-              name: "x-linefor-key",
+              name: "x-early-key",
               in: "header",
             },
           },

@@ -4,7 +4,7 @@ import { Elysia } from "elysia";
 import { supabase } from "./supabase";
 
 export const authen = (app: Elysia) =>
-  app.use(cookie()).derive(async ({ setCookie, cookie: { access_token, refresh_token } }) => {
+  app.use(cookie()).derive(async ({ cookie: { access_token, refresh_token } }) => {
     const { data, error } = await supabase.auth.getUser(access_token);
 
     if (data.user) {

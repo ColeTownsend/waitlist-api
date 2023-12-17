@@ -1,5 +1,5 @@
 {
-  "name": "linefor-api",
+  "name": "early-api",
   "version": "1.0.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -19,16 +19,23 @@
     "test:reset:db": "supabase db reset && supabase test db --debug"
   },
   "dependencies": {
-    "@biomejs/biome": "1.2.2",
     "@elysiajs/cookie": "latest",
     "@elysiajs/server-timing": "^0.7.1",
     "@elysiajs/swagger": "latest",
+    "@react-email/components": "^0.0.12",
     "@supabase/supabase-js": "latest",
+    "@upstash/qstash": "^2.3.0",
+    "@upstash/redis": "^1.25.2",
     "elysia": "latest",
     "elysia-helmet": "^1.0.1",
-    "elysia-rate-limit": "^2.0.1"
+    "elysia-rate-limit": "^2.0.1",
+    "react": "^18.2.0",
+    "resend": "^2.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "1.2.2",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
     "bun-types": "latest"
   },
   "module": "src/index.js"

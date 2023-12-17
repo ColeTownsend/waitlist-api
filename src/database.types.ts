@@ -472,6 +472,7 @@ export interface Database {
         Args: {
           p_waitlist_id: string
           p_email: string
+          p_automatic_confirmation: boolean
           p_referral_code?: string
         }
         Returns: {
@@ -482,6 +483,7 @@ export interface Database {
           waitlist_id: string
           joined_at: string
           confirmed: boolean
+          confirmation_token: string
           confirmed_at: string
         }[]
       }

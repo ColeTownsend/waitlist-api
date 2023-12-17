@@ -119,6 +119,12 @@ CREATE TABLE waitlist_referrals (
   UNIQUE (referrer_user_id, referred_signup_id, waitlist_id)
 );
 
+CREATE INDEX idx_waitlist_signups_email_waitlist_id ON waitlist_signups(email, waitlist_id);
+CREATE INDEX idx_waitlist_referrals_referred_signup_waitlist_id_confirmed ON waitlist_referrals(referred_signup_id, waitlist_id, confirmed);
+CREATE INDEX idx_waitlist_referrals_referrer_user_id ON waitlist_referrals(referrer_user_id);
+CREATE INDEX idx_waitlist_settings_waitlist_id ON waitlist_settings(waitlist_id);
+
+
 insert into storage.buckets (id, name, PUBLIC)
   values ('logos', 'logos', true);
 
