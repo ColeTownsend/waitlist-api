@@ -1,6 +1,6 @@
 import { RealtimePostgresChangesPayload, createClient } from "@supabase/supabase-js";
 import { Database } from "../database.types";
-import { WaitlistDataStore } from "./cache";
+import { WaitlistDataStore } from "@libs/cache";
 
 const { SUPABASE_URL, SERVICE_ROLE_KEY } = process.env;
 

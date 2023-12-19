@@ -1,8 +1,8 @@
 import { swagger } from "@elysiajs/swagger";
 import { Elysia, t } from "elysia";
 import { serverTiming } from "@elysiajs/server-timing";
-import { ip } from "./plugins/ip";
-import { admin, auth, waitlist } from "./modules";
+// import { ip } from "./plugins/ip";
+import { admin, auth, waitlist, waitlist_email } from "./modules";
 import { httpError } from "./plugins/httpError";
 import { rateLimit } from "elysia-rate-limit";
 import { initializeRealtimeListener } from "@libs/supabase";
@@ -52,6 +52,7 @@ const app = new Elysia()
   .use(waitlist)
   .use(auth)
   .use(admin)
+  .use(waitlist_email)
   .decorate("cache", new WaitlistDataStore(redis))
   .onStart(async ({ cache }) => {
     initializeRealtimeListener(cache);
@@ -59,4 +60,4 @@ const app = new Elysia()
   })
   .listen(process.env.PORT || 3000);
 
-console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+console.log(`🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port}`);

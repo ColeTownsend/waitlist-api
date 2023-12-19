@@ -1,10 +1,9 @@
 import { Elysia } from "elysia";
-import { cookie } from "@elysiajs/cookie";
 
-import { supabase } from "./supabase";
-import apiKey from "../plugins/apiKey";
-import { httpErrorDecorator } from "../plugins/httpError";
-import { WaitlistDataStore } from "./cache";
+import { supabase } from "@libs/supabase";
+import apiKey from "@plugins/apiKey";
+import { httpErrorDecorator } from "@plugins/httpError";
+import { WaitlistDataStore } from "@libs/cache";
 import { redis } from ".";
 
 export const authenticateKey = (app: Elysia) =>

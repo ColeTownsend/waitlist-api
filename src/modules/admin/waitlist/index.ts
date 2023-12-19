@@ -154,6 +154,34 @@ export const admin = (app: Elysia) =>
           },
         },
       )
+      .delete(
+        "/:id/email",
+        async ({ params: { id }, query: { email }, HttpError }) => {
+          const { error } = await supabase
+            .from("waitlist_signups")
+            .delete()
+            .eq("waitlist_id", id)
+            .eq("email", email);
+
+          if (error) {
+            throw HttpError.BadRequest(error.message);
+          }
+
+          return {
+            success: !error,
+          };
+        },
+        {
+          query: t.Object({
+            email: t.String({
+              type: "email",
+            }),
+          }),
+          detail: {
+            description: "Delete email from waitlist",
+          },
+        },
+      )
       .get(
         "/:id/settings",
         async ({ params: { id }, HttpError }) => {
