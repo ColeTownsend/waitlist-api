@@ -1,7 +1,8 @@
 import { Elysia, t } from "elysia";
 
-import { authen, supabase } from "../../../libs";
+import { authen, redis, supabase } from "../../../libs";
 import { httpErrorDecorator } from "../../../plugins/httpError";
+import { WaitlistDataStore } from "../../../libs/cache";
 
 const SIZE = 50;
 

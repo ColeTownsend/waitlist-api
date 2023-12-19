@@ -7,9 +7,6 @@ import { httpErrorDecorator } from "../../plugins/httpError";
 import { authenticateKey } from "../../libs/authenticateKey";
 import { WaitlistEmail } from "./waitlist-email";
 
-// @TODO Find a better way to verify key is legit and belongs to a given waitlist
-// Ideas???
-
 type WaitlistSettings = {
   confirmation_settings: {
     automatic: boolean;
@@ -25,15 +22,34 @@ export const waitlist = (app: Elysia) =>
   app.group("/waitlist", (app) =>
     app
       .use(httpErrorDecorator)
-      .use(apiKey())
-      // Validate the API key
-      .use(authenticateKey)
+      .use(apiKey()) // get api key + associated org
+      .use(authenticateKey) // Validate the API key
+      // Verify waitlist exists
+      .onBeforeHandle(async ({ params: { id }, set, cache }) => {
+        const cachedWaitlist = await cache.getWaitlistData(id);
+
+        if (!cachedWaitlist) {
+          // Fallback lookup
+          const { data, error } = await supabase
+            .from("waitlists")
+            .select("id,name,description,organization_id")
+            .eq("id", id)
+            .limit(1)
+            .maybeSingle();
+
+          if (data) {
+            await cache.updateWaitlistData(id, data);
+          }
+
+          if (error || !data) {
+            set.status = "Not Found";
+            return set;
+          }
+        }
+      })
       .get(
         "/:id",
         async ({ params: { id }, HttpError, organizationId }) => {
-          console.log(organizationId);
-          // Lookup waitlist by ID.
-          // @TODO gotta be a better way to do this
           const { data, error } = await supabase
             .from("waitlists")
             .select("name, description, waitlist_signups(count), waitlist_referrals(count)")
@@ -54,6 +70,7 @@ export const waitlist = (app: Elysia) =>
             data: data ?? null,
           };
         },
+
         {
           detail: {
             description: "Retrieve waitlist by id",
@@ -62,27 +79,22 @@ export const waitlist = (app: Elysia) =>
       )
       .post(
         "/:id/join",
-        async ({ params: { id }, body, HttpError, organizationId }) => {
-          // Lookup waitlist by ID.
-          // @TODO gotta be a better way to do this
-          const { data: waitlist, error: waitlistError } = await supabase
-            .from("waitlists")
-            .select("id, name, waitlist_settings(settings)")
+        async ({ params: { id }, body, HttpError }) => {
+          const { data: waitlist_settings, error } = await supabase
+            .from("waitlist_settings")
+            .select("settings")
             .eq("id", id)
-            .eq("organization_id", organizationId)
             .limit(1)
             .maybeSingle();
 
-          console.log(waitlist?.waitlist_settings[0].settings);
-
-          if (waitlistError) {
-            throw HttpError.Internal(waitlistError.message);
+          if (error) {
+            throw HttpError.BadRequest(error.message);
           }
-          if (!waitlist) {
-            throw HttpError.NotFound("Waitlist not found");
+          if (!waitlist_settings) {
+            throw HttpError.NotFound("No waitlist found");
           }
 
-          const settings = waitlist.waitlist_settings[0].settings as WaitlistSettings;
+          const settings = waitlist_settings.settings as WaitlistSettings;
 
           // get waitlist
           // Find user by referral code
@@ -114,7 +126,7 @@ export const waitlist = (app: Elysia) =>
             try {
               await resend.emails.send({
                 from: "Welcome <onboarding@mail.itsearly.dev>",
-                to: ["cole@twnsnd.co"],
+                to: [body.email],
                 subject: "Joined Waitlist",
                 // @TODO make this a url with query param to authenticate the user
                 // Do we need a redirect after that?
@@ -142,26 +154,9 @@ export const waitlist = (app: Elysia) =>
       )
       .get(
         "/:id/confirm",
-        async ({ params: { id }, query: { email }, organizationId, HttpError }) => {
-          // Lookup waitlist by ID.
-          // @TODO gotta be a better way to do this
-          const { data: waitlist, error: waitlistError } = await supabase
-            .from("waitlists")
-            .select("id")
-            .eq("id", id)
-            .eq("organization_id", organizationId)
-            .limit(1)
-            .maybeSingle();
-
-          if (waitlistError) {
-            throw HttpError.Internal(waitlistError.message);
-          }
-          if (!waitlist) {
-            throw HttpError.NotFound("Waitlist not found");
-          }
-
+        async ({ params: { id }, query: { email }, HttpError }) => {
           // confirm user
-          const { data, error } = await supabase
+          const { error } = await supabase
             .rpc("confirm_user_referral", {
               p_email: email,
               p_waitlist_id: id,

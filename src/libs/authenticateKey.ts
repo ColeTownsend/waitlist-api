@@ -4,12 +4,15 @@ import { cookie } from "@elysiajs/cookie";
 import { supabase } from "./supabase";
 import apiKey from "../plugins/apiKey";
 import { httpErrorDecorator } from "../plugins/httpError";
+import { WaitlistDataStore } from "./cache";
+import { redis } from ".";
 
 export const authenticateKey = (app: Elysia) =>
   app
     .use(apiKey())
     .use(httpErrorDecorator)
-    .derive(async ({ api_key, HttpError }) => {
+    .decorate("cache", new WaitlistDataStore(redis))
+    .derive(async ({ api_key, HttpError, cache }) => {
       if (!api_key) {
         throw new Error("API KEY REQUIRED");
       }

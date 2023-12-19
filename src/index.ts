@@ -5,6 +5,9 @@ import { ip } from "./plugins/ip";
 import { admin, auth, waitlist } from "./modules";
 import { httpError } from "./plugins/httpError";
 import { rateLimit } from "elysia-rate-limit";
+import { initializeRealtimeListener } from "@libs/supabase";
+import { WaitlistDataStore } from "@libs/cache";
+import { redis } from "./libs";
 
 const app = new Elysia()
   .use(rateLimit())
@@ -44,11 +47,16 @@ const app = new Elysia()
       },
     }),
   )
-  .use(ip())
+  // .use(ip())
   .use(serverTiming())
   .use(waitlist)
   .use(auth)
   .use(admin)
+  .decorate("cache", new WaitlistDataStore(redis))
+  .onStart(async ({ cache }) => {
+    initializeRealtimeListener(cache);
+    console.log("Supabase Realtime Listener Initialized");
+  })
   .listen(process.env.PORT || 3000);
 
 console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);

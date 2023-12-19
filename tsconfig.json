@@ -15,6 +15,13 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@libs/*": ["libs/*"],
+      "@modules/*": ["modules/*"],
+      "@plugins/*": ["plugins/*"],
+      "@services/*": ["services/*"]
+    },
     "types": [
       "bun-types" // add Bun global
     ]

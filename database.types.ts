@@ -465,15 +465,15 @@ export interface Database {
         Args: {
           waitlist_name: string
           org_id: number
+          description?: string
         }
-        Returns: string
-      }
-      create_new_waitlist_simple: {
-        Args: {
-          waitlist_name: string
-          org_id: number
-        }
-        Returns: string
+        Returns: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          organization_id: number
+        }[]
       }
       create_waitlist_signup: {
         Args: {
