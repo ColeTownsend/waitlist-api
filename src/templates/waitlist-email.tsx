@@ -26,14 +26,14 @@ export const WaitlistEmail = ({ name, link }: WaitlistEmailProps) => (
           Thank you {name} for joining our waitlist and for your patience. We
           will send you another email when you get access.
         </Text>
-        <Button href={link} style={linkStyle}>Confirm your signup</Button>
+        <Button href={link}>Confirm your signup</Button>
       </Container>
     </Body>
   </Html>
 );
 
 const main = {
-  backgroundColor: "#000000",
+  backgroundColor: "#fff",
   margin: "0 auto",
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
@@ -45,7 +45,7 @@ const container = {
 };
 
 const h1 = {
-  color: "#ffffff",
+  color: "#000",
   fontSize: "24px",
   fontWeight: "600",
   lineHeight: "40px",
@@ -53,16 +53,8 @@ const h1 = {
 };
 
 const text = {
-  color: "#aaaaaa",
+  color: "#444",
   fontSize: "14px",
   lineHeight: "24px",
-  margin: "0 0 40px",
-};
-
-const linkStyle = {
-  color: "blue",
-  fontSize: "14px",
-  lineHeight: "24px",
-  padding: "10px 20px",
   margin: "0 0 40px",
 };

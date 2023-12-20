@@ -242,7 +242,6 @@ export interface Database {
       waitlist_referrals: {
         Row: {
           confirmed: boolean
-          confirmed_at: string | null
           created_at: string
           id: string
           organization_id: number
@@ -252,7 +251,6 @@ export interface Database {
         }
         Insert: {
           confirmed?: boolean
-          confirmed_at?: string | null
           created_at?: string
           id?: string
           organization_id: number
@@ -262,7 +260,6 @@ export interface Database {
         }
         Update: {
           confirmed?: boolean
-          confirmed_at?: string | null
           created_at?: string
           id?: string
           organization_id?: number
@@ -286,7 +283,7 @@ export interface Database {
           {
             foreignKeyName: "waitlist_referrals_referrer_user_id_fkey"
             columns: ["referrer_user_id"]
-            referencedRelation: "waitlist_signups"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -333,7 +330,7 @@ export interface Database {
       }
       waitlist_signups: {
         Row: {
-          confirmation_token: string | null
+          confirmation_token: string
           confirmed: boolean
           confirmed_at: string | null
           email: string
@@ -341,11 +338,14 @@ export interface Database {
           joined_at: string
           organization_id: number
           points: number
+          referrals_made: number
+          referred: boolean
           unique_share_code: string
           waitlist_id: string
+          waitlist_status: Database["public"]["Enums"]["waitlist_status"]
         }
         Insert: {
-          confirmation_token?: string | null
+          confirmation_token?: string
           confirmed?: boolean
           confirmed_at?: string | null
           email: string
@@ -353,11 +353,14 @@ export interface Database {
           joined_at?: string
           organization_id: number
           points?: number
+          referrals_made?: number
+          referred?: boolean
           unique_share_code?: string
           waitlist_id: string
+          waitlist_status?: Database["public"]["Enums"]["waitlist_status"]
         }
         Update: {
-          confirmation_token?: string | null
+          confirmation_token?: string
           confirmed?: boolean
           confirmed_at?: string | null
           email?: string
@@ -365,8 +368,11 @@ export interface Database {
           joined_at?: string
           organization_id?: number
           points?: number
+          referrals_made?: number
+          referred?: boolean
           unique_share_code?: string
           waitlist_id?: string
+          waitlist_status?: Database["public"]["Enums"]["waitlist_status"]
         }
         Relationships: [
           {
@@ -465,34 +471,8 @@ export interface Database {
         Args: {
           waitlist_name: string
           org_id: number
-          description?: string
         }
-        Returns: {
-          created_at: string
-          description: string | null
-          id: string
-          name: string
-          organization_id: number
-        }[]
-      }
-      create_waitlist_signup: {
-        Args: {
-          p_waitlist_id: string
-          p_email: string
-          p_automatic_confirmation: boolean
-          p_referral_code?: string
-        }
-        Returns: {
-          id: string
-          email: string
-          unique_share_code: string
-          organization_id: number
-          waitlist_id: string
-          joined_at: string
-          confirmed: boolean
-          confirmation_token: string
-          confirmed_at: string
-        }[]
+        Returns: string
       }
       current_user_is_member_of_organization: {
         Args: {
@@ -564,10 +544,6 @@ export interface Database {
         }
         Returns: string
       }
-      short_uuid: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
       transfer_organization: {
         Args: {
           org_id: number
@@ -586,6 +562,7 @@ export interface Database {
         | "incomplete"
         | "incomplete_expired"
         | "paused"
+      waitlist_status: "access_granted" | "joined" | "blocked"
     }
     CompositeTypes: {
       [_ in never]: never

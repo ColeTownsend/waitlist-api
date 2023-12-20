@@ -397,6 +397,99 @@ VALUES
   );
 
 INSERT INTO
+  public.api_tokens (organization_id)
+VALUES
+  (
+    6
+  ),
+  (
+    7
+  );
+
+
+INSERT INTO
+  public.waitlists (id, name, organization_id)
+VALUES
+  (
+    'a9b8d41b-82c5-4e29-95ba-3ea585686256',
+    'Waitlist 1',
+    6
+  ),
+  (
+    '77efab22-f95b-4102-bb85-c7d64012ce08',
+    'Waitlist 2',
+    6
+  ),
+  (
+    'ffeab8e0-81df-4391-a09c-0ded62bbcaed',
+    'Waitlist 3',
+    6
+  );
+
+
+INSERT INTO
+  public.waitlist_settings (waitlist_id, organization_id)
+VALUES
+  (
+    'a9b8d41b-82c5-4e29-95ba-3ea585686256',
+    6
+  ),
+  (
+    '77efab22-f95b-4102-bb85-c7d64012ce08',
+    6
+  ),
+  (
+    'ffeab8e0-81df-4391-a09c-0ded62bbcaed',
+    6
+  );
+
+
+
+INSERT INTO
+  public.waitlist_signups (email, points, referred, referrals_made, organization_id, waitlist_id, joined_at, confirmed)
+VALUES
+  (
+    'user1@example.com',
+    0,
+    false,
+    0,
+    6,
+    'a9b8d41b-82c5-4e29-95ba-3ea585686256',
+    NOW(),
+    false
+  ),
+  (
+    'user2@example.com',
+    0,
+    false,
+    0,
+    6,
+    'a9b8d41b-82c5-4e29-95ba-3ea585686256',
+    NOW(),
+    false
+  ),
+  (
+    'user3@example.com',
+    0,
+    false,
+    0,
+    6,
+    '77efab22-f95b-4102-bb85-c7d64012ce08',
+    NOW(),
+    false
+  ),
+  (
+    'user4@example.com',
+    0,
+    false,
+    0,
+    6,
+    '77efab22-f95b-4102-bb85-c7d64012ce08',
+    NOW(),
+    false
+  );
+
+INSERT INTO
   public.memberships (
     id,
     user_id,

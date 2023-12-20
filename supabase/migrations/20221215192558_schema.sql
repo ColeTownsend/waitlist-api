@@ -9,6 +9,26 @@ create type subscription_status as ENUM (
   'paused'
 );
 
+create type waitlist_status as ENUM (
+  'access_granted',
+  'joined',
+  'blocked'
+);
+
+CREATE OR REPLACE FUNCTION random_alphanumeric_string(length int)
+RETURNS text AS $$
+DECLARE
+  chars text[] := '{0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,A,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z}';
+  result text := '';
+  i int;
+BEGIN
+  FOR i IN 1..length LOOP
+    result := result || chars[1 + random() * array_length(chars, 1)];
+  END LOOP;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
 create table users (
   id uuid references auth.users not null primary key,
   photo_url text,
@@ -96,14 +116,17 @@ CREATE TABLE waitlist_signups (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   email text NOT NULL,
   points int NOT NULL DEFAULT 0,
-  unique_share_code text not null DEFAULT random_alphanumeric_string(8)
+  waitlist_status waitlist_status not null default 'joined', 
+  referred boolean NOT NULL DEFAULT false,
+  referrals_made int NOT NULL DEFAULT 0,
+  unique_share_code text not null DEFAULT random_alphanumeric_string(8),
   organization_id bigint not null references public.organizations (id) on delete cascade,
   waitlist_id uuid NOT NULL REFERENCES waitlists(id) on delete cascade,
   joined_at timestamptz NOT NULL DEFAULT now(),
   confirmed boolean NOT NULL DEFAULT false, -- Boolean field to track confirmation
-  confirmation_token text, -- Optional: Token used for email confirmation
+  confirmation_token text not null DEFAULT uuid_generate_v4(), -- Optional: Token used for email confirmation
   confirmed_at timestamptz, -- Timestamp for when the signup is confirmed
-  UNIQUE (email, waitlist_id)
+  UNIQUE (email, waitlist_id),
   UNIQUE (unique_share_code, waitlist_id)
 );
 
@@ -368,10 +391,10 @@ create policy "Waitlist Referrlas can only be read by members that belong to the
   for select
     using (current_user_is_member_of_organization (organization_id));
 
-create policy "Waitlist Referrals can only be read by members that belong to the
-  organization" on waitlist_settings
+-- Chnge this eventually
+create policy "Waitlist Settings can be read by anyone" on waitlist_settings
   for select
-    using (current_user_is_member_of_organization (organization_id));
+    using (true);
 
 create policy "Users can read the public data of users belonging to the same
   organization" on users
@@ -538,20 +561,6 @@ create policy "Avatars can be read and written only by the user that owns the
       with check (bucket_id = 'avatars'
       and (replace(storage.filename (name), concat('.', storage.extension (name)), '')::uuid) = auth.uid ());
 
-CREATE OR REPLACE FUNCTION random_alphanumeric_string(length int)
-RETURNS text AS $$
-DECLARE
-  chars text[] := '{0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}';
-  result text := '';
-  i int;
-BEGIN
-  FOR i IN 1..length LOOP
-    result := result || chars[1 + random() * array_length(chars, 1)];
-  END LOOP;
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql;
-
 CREATE OR REPLACE FUNCTION confirm_user_referral(p_email text, p_waitlist_id uuid)
 RETURNS void AS $$
 DECLARE
@@ -626,3 +635,68 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+alter table waitlists replica identity full;
+
+CREATE OR REPLACE FUNCTION public.create_waitlist_signup(p_waitlist_id uuid, p_email text, p_automatic_confirmation boolean, p_referral_code text DEFAULT NULL::text)
+ RETURNS TABLE(id uuid, email text, unique_share_code text, organization_id bigint, waitlist_id uuid, joined_at timestamp with time zone, confirmed boolean, confirmation_token text, confirmed_at timestamp with time zone)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    signup_id uuid; -- Variable to store the new signup ID
+    referrer_id uuid; -- Variable to store the referrer user ID
+    org_id bigint; -- Variable to store the organization ID
+    current_confirmed_at timestamp with time zone; -- Variable to store the confirmed_at value
+BEGIN
+    -- Retrieve the organization_id associated with the provided waitlist_id
+    SELECT wl.organization_id INTO org_id
+    FROM waitlists wl
+    WHERE wl.id = p_waitlist_id;
+
+    IF org_id IS NULL THEN
+        RAISE EXCEPTION 'No organization associated with the provided waitlist_id %', p_waitlist_id;
+    END IF;
+
+    -- Determine the confirmed_at value based on p_automatic_confirmation
+    IF p_automatic_confirmation THEN
+        current_confirmed_at := NOW();
+    ELSE
+        current_confirmed_at := NULL;
+    END IF;
+
+    BEGIN
+        -- Insert into waitlist_signups and return the new signup id
+        INSERT INTO waitlist_signups (waitlist_id, email, unique_share_code, organization_id, confirmed, confirmed_at)
+        VALUES (p_waitlist_id, p_email, random_alphanumeric_string(8), org_id, p_automatic_confirmation, current_confirmed_at)
+        RETURNING waitlist_signups.id INTO signup_id;
+    EXCEPTION WHEN unique_violation THEN
+        RAISE EXCEPTION 'A signup with the provided email already exists for this waitlist.';
+    END;
+
+    IF p_referral_code IS NOT NULL THEN
+        SELECT ws.id INTO referrer_id
+        FROM waitlist_signups ws
+        WHERE ws.unique_share_code = p_referral_code;
+
+        IF referrer_id IS NOT NULL THEN
+            -- Insert a record into waitlist_referrals
+            INSERT INTO waitlist_referrals (referrer_user_id, referred_signup_id, waitlist_id, organization_id)
+            VALUES (referrer_id, signup_id, p_waitlist_id, org_id);
+        END IF;
+    END IF;
+
+    -- Return the new signup details
+    RETURN QUERY
+    SELECT 
+        ws.id, 
+        ws.email, 
+        ws.unique_share_code, 
+        ws.organization_id, 
+        ws.waitlist_id, 
+        ws.joined_at, 
+        ws.confirmed, 
+        ws.confirmation_token, 
+        ws.confirmed_at
+    FROM waitlist_signups ws
+    WHERE ws.id = signup_id;
+END;
+$function$

@@ -1,11 +1,13 @@
-// Public API Calls for Waitlist
+// API Waitlist Actions
 import { Elysia, t } from "elysia";
 
-import { redis, resend, supabase } from "../../libs";
+import { supabase } from "@libs/supabase";
+import { resend } from "@libs/resend";
+import { apiKey } from "@plugins/apiKey";
 
 import { httpErrorDecorator } from "@plugins/httpError";
+import { authenticateKey } from "@libs/authenticateKey";
 import { WaitlistEmail } from "@templates/waitlist-email";
-import { WaitlistDataStore } from "@libs/cache";
 
 type WaitlistSettings = {
   confirmation_settings: {
@@ -18,11 +20,13 @@ type WaitlistSettings = {
   points_per_confirmed_referral: number;
 };
 
-export const waitlist = (app: Elysia) =>
-  app.group("/waitlist", (app) =>
+export const waitlist_api = (app: Elysia) =>
+  app.group("/api/v1/waitlist", (app) =>
     app
       .use(httpErrorDecorator)
-      .decorate("cache", new WaitlistDataStore(redis))
+      .use(apiKey()) // get api key + associated org
+      .use(authenticateKey) // Validate the API key
+      // Verify waitlist exists
       .onBeforeHandle(async ({ params: { id }, set, cache }) => {
         const cachedWaitlist = await cache.getWaitlistData(id);
 
@@ -47,11 +51,12 @@ export const waitlist = (app: Elysia) =>
       })
       .get(
         "/:id",
-        async ({ params: { id }, HttpError }) => {
+        async ({ params: { id }, HttpError, organizationId }) => {
           const { data, error } = await supabase
             .from("waitlists")
             .select("name, description, waitlist_signups(count), waitlist_referrals(count)")
             .eq("id", id)
+            .eq("organization_id", organizationId)
             .limit(1)
             .maybeSingle();
 
@@ -74,23 +79,21 @@ export const waitlist = (app: Elysia) =>
           },
         },
       )
-      // @TODO add some protection here like captcha + deduping + fingerprinting
       .post(
         "/:id/join",
         async ({ params: { id }, body, HttpError }) => {
+          console.log("Waitlist id", id);
           const { data: waitlist_settings, error } = await supabase
             .from("waitlist_settings")
             .select("settings")
-            .eq("waitlist_id", id)
+            .eq("id", id)
             .limit(1)
             .maybeSingle();
-          console.log(id, body);
 
           if (error) {
             throw HttpError.BadRequest(error.message);
           }
           if (!waitlist_settings) {
-            console.log(waitlist_settings, error);
             throw HttpError.NotFound("No waitlist found");
           }
 
@@ -145,6 +148,39 @@ export const waitlist = (app: Elysia) =>
               format: "email",
             }),
             referral_code: t.Optional(t.String()),
+          }),
+          detail: {
+            tags: ["Authorized"],
+            description: "Create a waitlist",
+          },
+        },
+      )
+      .get(
+        "/:id/confirm",
+        async ({ params: { id }, query: { email }, HttpError }) => {
+          // confirm user
+          const { error } = await supabase
+            .rpc("confirm_user_referral", {
+              p_email: email,
+              p_waitlist_id: id,
+            })
+            .select()
+            .maybeSingle();
+
+          if (error) {
+            console.error(error);
+            throw HttpError.Internal(error.message);
+          }
+
+          return {
+            success: !error,
+          };
+        },
+        {
+          query: t.Object({
+            email: t.String({
+              format: "email",
+            }),
           }),
           detail: {
             tags: ["Authorized"],

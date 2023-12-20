@@ -20,7 +20,8 @@
       "@libs/*": ["libs/*"],
       "@modules/*": ["modules/*"],
       "@plugins/*": ["plugins/*"],
-      "@services/*": ["services/*"]
+      "@services/*": ["services/*"],
+      "@templates/*": ["templates/*"]
     },
     "types": [
       "bun-types" // add Bun global

@@ -1,10 +1,11 @@
+// Confirmation via token by users
 import { Elysia, t } from "elysia";
 
-import { supabase } from "../../libs";
+import { supabase } from "@libs/supabase";
 
-import { httpErrorDecorator } from "../../plugins/httpError";
+import { httpErrorDecorator } from "@plugins/httpError";
 
-export const waitlist = (app: Elysia) =>
+export const confirmation = (app: Elysia) =>
   app.use(httpErrorDecorator).get(
     "/waitlist/:id/confirmation",
     async ({ params: { id }, query: { token }, HttpError }) => {

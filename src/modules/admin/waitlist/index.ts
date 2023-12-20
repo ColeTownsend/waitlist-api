@@ -1,8 +1,9 @@
+// Admin Waitlist Actions
 import { Elysia, t } from "elysia";
 
-import { authen, redis, supabase } from "../../../libs";
-import { httpErrorDecorator } from "../../../plugins/httpError";
-import { WaitlistDataStore } from "../../../libs/cache";
+import { authen, supabase } from "../../../libs";
+import { httpErrorDecorator } from "@plugins/httpError";
+import { Database } from "../../../database.types";
 
 const SIZE = 50;
 

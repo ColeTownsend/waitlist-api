@@ -9,7 +9,7 @@ export const supabase = createClient<Database>(SUPABASE_URL!, SERVICE_ROLE_KEY!)
 type WaitlistType = Database["public"]["Tables"]["waitlists"]["Row"]; // ...
 
 export function initializeRealtimeListener(cache: WaitlistDataStore) {
-  supabase
+  const sb = supabase
     .channel("waitlists")
     .on(
       "postgres_changes",
@@ -19,6 +19,7 @@ export function initializeRealtimeListener(cache: WaitlistDataStore) {
         table: "waitlists",
       },
       async (payload: RealtimePostgresChangesPayload<WaitlistType>) => {
+        console.log(payload.eventType);
         switch (payload.eventType) {
           case "INSERT":
             // Code to create waitlist cache
