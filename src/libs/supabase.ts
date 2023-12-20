@@ -19,7 +19,6 @@ export function initializeRealtimeListener(cache: WaitlistDataStore) {
         table: "waitlists",
       },
       async (payload: RealtimePostgresChangesPayload<WaitlistType>) => {
-        console.log(payload.eventType);
         switch (payload.eventType) {
           case "INSERT":
             // Code to create waitlist cache

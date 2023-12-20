@@ -44,8 +44,6 @@ export const admin = (app: Elysia) =>
           const from = page ? (Number(page) - 1) * limit : 0;
           const to = page ? from + SIZE : SIZE;
 
-          console.log({ from, to });
-
           const { data, error } = await supabase
             .from("waitlist_signups")
             .select("id,email,points,joined_at,unique_share_code", { count: "exact" })

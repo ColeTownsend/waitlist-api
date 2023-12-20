@@ -82,7 +82,6 @@ export const waitlist_api = (app: Elysia) =>
       .post(
         "/:id/join",
         async ({ params: { id }, body, HttpError }) => {
-          console.log("Waitlist id", id);
           const { data: waitlist_settings, error } = await supabase
             .from("waitlist_settings")
             .select("settings")

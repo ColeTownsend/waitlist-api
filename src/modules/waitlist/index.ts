@@ -84,13 +84,11 @@ export const waitlist = (app: Elysia) =>
             .eq("waitlist_id", id)
             .limit(1)
             .maybeSingle();
-          console.log(id, body);
 
           if (error) {
             throw HttpError.BadRequest(error.message);
           }
           if (!waitlist_settings) {
-            console.log(waitlist_settings, error);
             throw HttpError.NotFound("No waitlist found");
           }
 
