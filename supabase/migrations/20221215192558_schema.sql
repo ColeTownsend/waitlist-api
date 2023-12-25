@@ -9,6 +9,26 @@ create type subscription_status as ENUM (
   'paused'
 );
 
+create type waitlist_status as ENUM (
+  'access_granted',
+  'joined',
+  'blocked'
+);
+
+CREATE OR REPLACE FUNCTION random_alphanumeric_string(length int)
+RETURNS text AS $$
+DECLARE
+  chars text[] := '{0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,A,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z}';
+  result text := '';
+  i int;
+BEGIN
+  FOR i IN 1..length LOOP
+    result := result || chars[1 + random() * array_length(chars, 1)];
+  END LOOP;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+
 create table users (
   id uuid references auth.users not null primary key,
   photo_url text,
@@ -83,34 +103,57 @@ CREATE TABLE waitlist_settings (
     "points_per_confirmed_referral": 1,
     "confirmation_settings": {
        "automatic": false,
-       "enable_confirmation_email": false
+       "enable_confirmation_email": false,
+       "custom_redirect_url": ""
     },
     "notification_settings": {
       "email": true
+    },
+    "email_sender": {
+      "reply_to": "",
+      "logo": "",
+      "sender_email": "",
+      "sender_name": ""
+    },
+    "user_emails": {
+      "new_signup": false,
+      "referral_confirmation": true,
+      "access_granted": true
     }
   }'::jsonb
 );
+
+CREATE TABLE waitlist_webhooks (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(), -- Unique identifier for each webhook
+  url text NOT NULL,                             -- URL of the webhook
+  organization_id bigint not null references public.organizations (id) on delete cascade,
+  waitlist_id uuid NOT NULL REFERENCES waitlists(id) on delete cascade
+);
+
 
 -- Make waitlist users table
 CREATE TABLE waitlist_signups (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
   email text NOT NULL,
   points int NOT NULL DEFAULT 0,
-  unique_share_code text not null DEFAULT random_alphanumeric_string(8)
+  waitlist_status waitlist_status not null default 'joined', 
+  referred boolean NOT NULL DEFAULT false,
+  referrals_made int NOT NULL DEFAULT 0,
+  unique_share_code text not null DEFAULT random_alphanumeric_string(8),
   organization_id bigint not null references public.organizations (id) on delete cascade,
   waitlist_id uuid NOT NULL REFERENCES waitlists(id) on delete cascade,
   joined_at timestamptz NOT NULL DEFAULT now(),
   confirmed boolean NOT NULL DEFAULT false, -- Boolean field to track confirmation
-  confirmation_token text, -- Optional: Token used for email confirmation
+  confirmation_token text not null DEFAULT uuid_generate_v4(), -- Optional: Token used for email confirmation
   confirmed_at timestamptz, -- Timestamp for when the signup is confirmed
-  UNIQUE (email, waitlist_id)
+  UNIQUE (email, waitlist_id),
   UNIQUE (unique_share_code, waitlist_id)
 );
 
 -- Track what users were referred
 CREATE TABLE waitlist_referrals (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  referrer_user_id uuid NOT NULL REFERENCES users(id) on delete set null, -- The user who made the referral
+  referrer_user_id uuid NOT NULL REFERENCES waitlist_signups(id) on delete cascade, -- The user who made the referral
   referred_signup_id uuid REFERENCES waitlist_signups(id) on delete cascade, -- The waitlist signup that was referred
   organization_id bigint not null references public.organizations (id) on delete cascade,
   waitlist_id uuid NOT NULL REFERENCES waitlists(id) on delete cascade, -- The waitlist to which the referral pertains
@@ -118,6 +161,14 @@ CREATE TABLE waitlist_referrals (
   confirmed boolean NOT NULL DEFAULT false, -- Boolean field to track if the referral is confirmed
   UNIQUE (referrer_user_id, referred_signup_id, waitlist_id)
 );
+
+CREATE INDEX idx_waitlist_signups_email_waitlist_id ON waitlist_signups(email, waitlist_id);
+CREATE INDEX idx_waitlist_referrals_referred_signup_waitlist_id_confirmed ON waitlist_referrals(referred_signup_id, waitlist_id, confirmed);
+CREATE INDEX idx_waitlist_signups_email ON waitlist_signups(email);
+CREATE INDEX idx_waitlist_signups_waitlist_id ON waitlist_signups(waitlist_id);
+CREATE INDEX idx_waitlist_referrals_referrer_user_id ON waitlist_referrals(referrer_user_id);
+CREATE INDEX idx_waitlist_settings_waitlist_id ON waitlist_settings(waitlist_id);
+
 
 insert into storage.buckets (id, name, PUBLIC)
   values ('logos', 'logos', true);
@@ -362,8 +413,13 @@ create policy "Waitlist Referrlas can only be read by members that belong to the
   for select
     using (current_user_is_member_of_organization (organization_id));
 
-create policy "Waitlist Referrals can only be read by members that belong to the
-  organization" on waitlist_settings
+-- Chnge this eventually
+create policy "Waitlist Settings can be read by anyone" on waitlist_settings
+  for select
+    using (true);
+
+-- Chnge this eventually
+create policy "Waitlist can be read by anyone" on waitlist
   for select
     using (current_user_is_member_of_organization (organization_id));
 
@@ -532,20 +588,6 @@ create policy "Avatars can be read and written only by the user that owns the
       with check (bucket_id = 'avatars'
       and (replace(storage.filename (name), concat('.', storage.extension (name)), '')::uuid) = auth.uid ());
 
-CREATE OR REPLACE FUNCTION random_alphanumeric_string(length int)
-RETURNS text AS $$
-DECLARE
-  chars text[] := '{0,1,2,3,4,5,6,7,8,9,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z}';
-  result text := '';
-  i int;
-BEGIN
-  FOR i IN 1..length LOOP
-    result := result || chars[1 + random() * array_length(chars, 1)];
-  END LOOP;
-  RETURN result;
-END;
-$$ LANGUAGE plpgsql;
-
 CREATE OR REPLACE FUNCTION confirm_user_referral(p_email text, p_waitlist_id uuid)
 RETURNS void AS $$
 DECLARE
@@ -583,3 +625,195 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION confirm_user_referral_with_token(p_token text, p_waitlist_id uuid)
+RETURNS void AS $$
+DECLARE
+    referrer_id uuid;
+    points_to_add int;
+BEGIN
+    -- Update and confirm the waitlist_signup if not already confirmed
+    UPDATE waitlist_signups
+    SET confirmed = true, confirmed_at = NOW()
+    WHERE confirmation_token = p_token AND waitlist_id = p_waitlist_id AND NOT confirmed;
+
+    -- Confirm the waitlist_referral and get the referrer's id, only if not already confirmed
+    WITH updated_referrals AS (
+        UPDATE waitlist_referrals
+        SET confirmed = true
+        WHERE referred_signup_id IN (
+            SELECT id FROM waitlist_signups WHERE confirmation_token = p_token AND waitlist_id = p_waitlist_id
+        ) AND NOT confirmed
+        RETURNING referrer_user_id
+    )
+    SELECT referrer_user_id INTO referrer_id FROM updated_referrals LIMIT 1;
+
+    -- If a referral was updated, then update points
+    IF FOUND THEN
+        -- Get the points to add from waitlist_settings
+        SELECT (settings->>'points_per_confirmed_referral')::int INTO points_to_add
+        FROM waitlist_settings
+        WHERE waitlist_id = p_waitlist_id;
+
+        -- Update the referrer's points
+        UPDATE waitlist_signups
+        SET points = points + COALESCE(points_to_add, 0)
+        WHERE id = referrer_id;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+alter table waitlists replica identity full;
+
+CREATE OR REPLACE FUNCTION public.create_waitlist_signup(p_waitlist_id uuid, p_email text, p_automatic_confirmation boolean, p_referral_code text DEFAULT NULL::text)
+ RETURNS TABLE(id uuid, email text, unique_share_code text, organization_id bigint, waitlist_id uuid, referred boolean, "waitlist_status" waitlist_status, joined_at timestamp with time zone, confirmed boolean, confirmation_token text, confirmed_at timestamp with time zone)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    signup_id uuid; -- Variable to store the new signup ID
+    referrer_id uuid; -- Variable to store the referrer user ID
+    org_id bigint; -- Variable to store the organization ID
+    current_confirmed_at timestamp with time zone; -- Variable to store the confirmed_at value
+    referred_status boolean;
+BEGIN
+	IF waitlist_status = 'blocked' THEN
+		RAISE EXCEPTION 'This email is blocked from the waitlist.';
+	END IF;
+    -- Retrieve the organization_id associated with the provided waitlist_id
+    SELECT wl.organization_id INTO org_id
+    FROM waitlists wl
+    WHERE wl.id = p_waitlist_id;
+
+    IF org_id IS NULL THEN
+        RAISE EXCEPTION 'No organization associated with the provided waitlist_id %', p_waitlist_id;
+    END IF;
+
+    -- Determine the confirmed_at value based on p_automatic_confirmation
+    IF p_automatic_confirmation THEN
+        current_confirmed_at := NOW();
+    ELSE
+        current_confirmed_at := NULL;
+    END IF;
+
+	IF p_referral_code IS NOT NULL AND p_referral_code <> '' THEN
+    	referred_status = true;
+	ELSE
+    	referred_status = false;
+	END IF;
+
+    BEGIN
+        -- Insert into waitlist_signups and return the new signup id
+        INSERT INTO waitlist_signups (waitlist_id, email, unique_share_code, organization_id, referred, confirmed, confirmed_at)
+        VALUES (p_waitlist_id, p_email, random_alphanumeric_string(8), org_id, referred_status, p_automatic_confirmation, current_confirmed_at)
+        RETURNING waitlist_signups.id INTO signup_id;
+    EXCEPTION WHEN unique_violation THEN
+        RAISE EXCEPTION 'A signup with the provided email already exists for this waitlist.';
+    END;
+
+    IF p_referral_code IS NOT NULL THEN
+        SELECT ws.id INTO referrer_id
+        FROM waitlist_signups ws
+        WHERE ws.unique_share_code = p_referral_code;
+
+        IF referrer_id IS NOT NULL THEN
+            -- Insert a record into waitlist_referrals
+            INSERT INTO waitlist_referrals (referrer_user_id, referred_signup_id, waitlist_id, organization_id)
+            VALUES (referrer_id, signup_id, p_waitlist_id, org_id);
+        END IF;
+    END IF;
+
+    -- Return the new signup details
+    RETURN QUERY
+    SELECT 
+        ws.id, 
+        ws.email, 
+        ws.unique_share_code, 
+        ws.organization_id, 
+        ws.waitlist_id, 
+        ws.referred,
+        ws.waitlist_status,
+        ws.joined_at, 
+        ws.confirmed, 
+        ws.confirmation_token, 
+        ws.confirmed_at
+    FROM waitlist_signups ws
+    WHERE ws.id = signup_id;
+END;
+$function$
+
+CREATE OR REPLACE FUNCTION public.create_waitlist_signup(p_waitlist_id uuid, p_email text, p_automatic_confirmation boolean, p_referral_code text DEFAULT NULL::text)
+ RETURNS TABLE(id uuid, email text, unique_share_code text, organization_id bigint, waitlist_id uuid, referred boolean, "waitlist_status" waitlist_status, joined_at timestamp with time zone, confirmed boolean, confirmation_token text, confirmed_at timestamp with time zone)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    signup_id uuid; -- Variable to store the new signup ID
+    referrer_id uuid; -- Variable to store the referrer user ID
+    org_id bigint; -- Variable to store the organization ID
+    current_confirmed_at timestamp with time zone; -- Variable to store the confirmed_at value
+    referred_status boolean;
+BEGIN
+	IF waitlist_status = 'blocked' THEN
+		RAISE EXCEPTION 'This email is blocked from the waitlist.';
+	END IF;
+    -- Retrieve the organization_id associated with the provided waitlist_id
+    SELECT wl.organization_id INTO org_id
+    FROM waitlists wl
+    WHERE wl.id = p_waitlist_id;
+
+    IF org_id IS NULL THEN
+        RAISE EXCEPTION 'No organization associated with the provided waitlist_id %', p_waitlist_id;
+    END IF;
+
+    -- Determine the confirmed_at value based on p_automatic_confirmation
+    IF p_automatic_confirmation THEN
+        current_confirmed_at := NOW();
+    ELSE
+        current_confirmed_at := NULL;
+    END IF;
+
+	IF p_referral_code IS NOT NULL AND p_referral_code <> '' THEN
+    	referred_status = true;
+	ELSE
+    	referred_status = false;
+	END IF;
+
+    BEGIN
+        -- Insert into waitlist_signups and return the new signup id
+        INSERT INTO waitlist_signups (waitlist_id, email, unique_share_code, organization_id, referred, confirmed, confirmed_at)
+        VALUES (p_waitlist_id, p_email, random_alphanumeric_string(8), org_id, referred_status, p_automatic_confirmation, current_confirmed_at)
+        RETURNING waitlist_signups.id INTO signup_id;
+    EXCEPTION WHEN unique_violation THEN
+        RAISE EXCEPTION 'A signup with the provided email already exists for this waitlist.';
+    END;
+
+    IF p_referral_code IS NOT NULL THEN
+        SELECT ws.id INTO referrer_id
+        FROM waitlist_signups ws
+        WHERE ws.unique_share_code = p_referral_code;
+
+        IF referrer_id IS NOT NULL THEN
+            -- Insert a record into waitlist_referrals
+            INSERT INTO waitlist_referrals (referrer_user_id, referred_signup_id, waitlist_id, organization_id)
+            VALUES (referrer_id, signup_id, p_waitlist_id, org_id);
+        END IF;
+    END IF;
+
+    -- Return the new signup details
+    RETURN QUERY
+    SELECT 
+        ws.id, 
+        ws.email, 
+        ws.unique_share_code, 
+        ws.organization_id, 
+        ws.waitlist_id, 
+        ws.referred,
+        ws.waitlist_status,
+        ws.joined_at, 
+        ws.confirmed, 
+        ws.confirmation_token, 
+        ws.confirmed_at
+    FROM waitlist_signups ws
+    WHERE ws.id = signup_id;
+END;
+$function$
+
+CREATE VIEW "public"."public_waitlists" AS select waitlists.id, waitlists."name", waitlists.description, count(waitlist_signups) from waitlists join waitlist_signups on waitlists.id = waitlist_signups.waitlist_id where waitlist_signups.waitlist_status != 'blocked' group by waitlists.id, waitlists."name", waitlists.description;

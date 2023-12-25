@@ -1,12 +1,14 @@
-// Public API Calls for Waitlist
+// API Waitlist Actions
 import { Elysia, t } from "elysia";
 
-import { redis, resend, supabase } from "../../libs";
+import { supabase } from "@libs/supabase";
+import { resend } from "@libs/resend";
+import { KafkaService, kafka } from "@libs/kafka";
+import { apiKey } from "@plugins/apiKey";
 
 import { httpErrorDecorator } from "@plugins/httpError";
-import WaitlistEmail from "emails/waitlist-email";
-import { WaitlistDataStore } from "@libs/cache";
-import { KafkaService, kafka } from "@libs/kafka";
+import { authenticateKey } from "@libs/authenticateKey";
+import { WaitlistEmail } from "emails/waitlist-email";
 
 type WaitlistSettings = {
   confirmation_settings: {
@@ -19,12 +21,14 @@ type WaitlistSettings = {
   points_per_confirmed_referral: number;
 };
 
-export const waitlist = (app: Elysia) =>
-  app.group("/waitlist", (app) =>
+export const waitlist_api = (app: Elysia) =>
+  app.group("/api/v1/waitlist", (app) =>
     app
       .use(httpErrorDecorator)
-      .decorate("cache", new WaitlistDataStore(redis))
       .decorate("events", new KafkaService(kafka))
+      .use(apiKey()) // get api key + associated org
+      .use(authenticateKey) // Validate the API key
+      // Verify waitlist exists
       .onBeforeHandle(async ({ params: { id }, set, cache }) => {
         const cachedWaitlist = await cache.getWaitlistData(id);
 
@@ -49,16 +53,16 @@ export const waitlist = (app: Elysia) =>
       })
       .get(
         "/:id",
-        async ({ params: { id }, HttpError }) => {
+        async ({ params: { id }, HttpError, organizationId }) => {
           const { data, error } = await supabase
-            .from("public_waitlists")
-            .select("*")
+            .from("waitlists")
+            .select("name, description, waitlist_signups(count), waitlist_referrals(count)")
             .eq("id", id)
+            .eq("organization_id", organizationId)
             .limit(1)
             .maybeSingle();
 
           if (error) {
-            console.error(error);
             throw HttpError.BadRequest(error.message);
           }
           if (!data) {
@@ -77,24 +81,20 @@ export const waitlist = (app: Elysia) =>
           },
         },
       )
-      // @TODO add some protection here like captcha + deduping + fingerprinting
       .post(
         "/:id/join",
         async ({ params: { id }, body, HttpError, events }) => {
-          console.log("Waitlist id", id);
           const { data: waitlist_settings, error } = await supabase
             .from("waitlist_settings")
             .select("settings")
-            .eq("waitlist_id", id)
+            .eq("id", id)
             .limit(1)
             .maybeSingle();
 
           if (error) {
-            console.error("Error", error);
             throw HttpError.BadRequest(error.message);
           }
           if (!waitlist_settings) {
-            console.log("No data here....", waitlist_settings);
             throw HttpError.NotFound("No waitlist found");
           }
 
@@ -123,15 +123,6 @@ export const waitlist = (app: Elysia) =>
             throw HttpError.Internal("Could not join waitlist");
           }
 
-          // Kafka Events
-          events.joined_waitlist(newSignup);
-          if (settings?.confirmation_settings.automatic) {
-            events.confirmed_signup(newSignup);
-            if (newSignup.referred) {
-              events.confirmed_referral(newSignup);
-            }
-          }
-
           // @TODO Move this to a queue / background task. this is slow.
           // can use qstash https://upstash.com/docs/qstash/overall/getstarted
           // or https://github.com/bee-queue/bee-queue
@@ -143,10 +134,7 @@ export const waitlist = (app: Elysia) =>
                 subject: "Joined Waitlist",
                 // @TODO make this a url with query param to authenticate the user
                 // Do we need a redirect after that?
-                react: WaitlistEmail({
-                  link: `http://localhost:3000/waitlist/${id}/confirmation?token=${newSignup.confirmation_token}`,
-                  name: "Test User",
-                }),
+                react: WaitlistEmail({ link: newSignup.confirmation_token, name: "Test User" }),
               });
             } catch (e) {
               throw HttpError.Internal("Could not send confirmation email");
@@ -161,6 +149,52 @@ export const waitlist = (app: Elysia) =>
               format: "email",
             }),
             referral_code: t.Optional(t.String()),
+          }),
+          detail: {
+            tags: ["Authorized"],
+            description: "Create a waitlist",
+          },
+        },
+      )
+      .get(
+        "/:id/confirm",
+        async ({ params: { id }, query: { email }, HttpError, events }) => {
+          // confirm user
+          const { data: confirmed_user, error } = await supabase
+            .rpc("confirm_user_referral", {
+              p_email: email,
+              p_waitlist_id: id,
+            })
+            .select()
+            .maybeSingle();
+
+          if (error) {
+            console.error(error);
+            throw HttpError.Internal(error.message);
+          }
+
+          if (!confirmed_user) {
+            console.error(error);
+            throw HttpError.NotFound("User not found.");
+          }
+
+          events.confirmed_signup(confirmed_user);
+
+          // @TODO fix types here
+          if (confirmed_user.referred) {
+            events.confirmed_referral(confirmed_user);
+          }
+
+          return {
+            success: !error,
+            data: confirmed_user,
+          };
+        },
+        {
+          query: t.Object({
+            email: t.String({
+              format: "email",
+            }),
           }),
           detail: {
             tags: ["Authorized"],

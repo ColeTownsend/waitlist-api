@@ -27,7 +27,7 @@ export interface BearerOptions {
     /**
      * Determined which type of Authentication should be Bearer token
      *
-     * @default x-linefor-key
+     * @default x-early-key
      */
     header?: string;
   };
@@ -35,16 +35,16 @@ export interface BearerOptions {
 
 export const apiKey = (
   {
-    extract: { body = "api_key", query = "api_key", header = "Bearer" } = {
+    extract: { body = "api_key", query = "x-early-key", header = "x-early-key" } = {
       body: "api_key",
-      query: "api_key",
-      header: "x-linefor-key",
+      query: "x-early-key",
+      header: "x-early-key",
     },
   }: BearerOptions = {
     extract: {
       body: "api_key",
-      query: "api_key",
-      header: "x-linefor-key",
+      query: "x-early-key",
+      header: "x-early-key",
     },
   },
 ) =>
@@ -59,8 +59,8 @@ export const apiKey = (
     .derive(({ query: queries, headers }) => ({
       get api_key() {
         let apiKey;
-        if (headers?.["x-linefor-key"]) {
-          apiKey = headers?.["x-linefor-key"];
+        if (headers?.["x-early-key"]) {
+          apiKey = headers?.["x-early-key"];
         }
 
         const q = queries[query];
@@ -71,8 +71,7 @@ export const apiKey = (
       },
     }))
     .onTransform((ctx) => {
-      console.log(ctx);
-      if (!ctx.headers?.["x-linefor-key"] && ctx.request.method !== "OPTIONS") {
+      if (!ctx.api_key && ctx.request.method !== "OPTIONS") {
         throw new ApiKeyAuthError("Unauthorized");
       }
     });

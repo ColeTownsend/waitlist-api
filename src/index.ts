@@ -1,20 +1,31 @@
 import { swagger } from "@elysiajs/swagger";
 import { Elysia, t } from "elysia";
-import { serverTiming } from "@elysiajs/server-timing";
-import { ip } from "./plugins/ip";
-import { admin, auth, waitlist } from "./modules";
+import { staticPlugin } from "@elysiajs/static";
+// import { serverTiming } from "@elysiajs/server-timing";
+import {
+  admin,
+  auth,
+  waitlist,
+  waitlist_api,
+  public_waitlist_email,
+  confirmation,
+} from "./modules";
 import { httpError } from "./plugins/httpError";
-import { rateLimit } from "elysia-rate-limit";
+// import { rateLimit } from "elysia-rate-limit";
+import { initializeRealtimeListener } from "@libs/supabase";
+import { WaitlistDataStore } from "@libs/cache";
+import { redis } from "./libs";
+import { ip } from "@plugins/ip";
 
 const app = new Elysia()
-  .use(rateLimit())
+  // .use(rateLimit())
   .use(httpError())
   .use(
     swagger({
       autoDarkMode: true,
       documentation: {
         info: {
-          title: "Linefor API",
+          title: "Early API",
           version: "0.1.0",
         },
         security: [
@@ -26,7 +37,7 @@ const app = new Elysia()
           securitySchemes: {
             ApiKeyAuth: {
               type: "apiKey",
-              name: "x-linefor-key",
+              name: "x-early-key",
               in: "header",
             },
           },
@@ -44,11 +55,22 @@ const app = new Elysia()
       },
     }),
   )
-  .use(ip())
-  .use(serverTiming())
+  .decorate("cache", new WaitlistDataStore(redis))
+  .onStart(async ({ cache }) => {
+    initializeRealtimeListener(cache);
+    console.log("Supabase Realtime Listener Initialized \n");
+  })
   .use(waitlist)
   .use(auth)
   .use(admin)
+  .use(ip())
+  .use(waitlist_api)
+  .use(public_waitlist_email)
+  .use(confirmation)
+  .use(staticPlugin())
   .listen(process.env.PORT || 3000);
 
-console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+console.log(
+  `🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port} 
+  \n🦊 Swagger is running at http://${app.server?.hostname}:${app.server?.port}/swagger`,
+);

@@ -58,15 +58,21 @@ export const ip =
   ) =>
   (app: Elysia) => {
     return app.derive(({ request }) => {
-      if (globalThis.Bun) {
+      if (globalThis.Bun && request) {
         return {
           ip: getIP(request.headers, config.checkHeaders),
         };
       }
 
-      const clientIP = getIP(request.headers, config.checkHeaders);
-      return {
-        ip: clientIP,
-      };
+      if (request) {
+        const clientIP = getIP(request.headers, config.checkHeaders);
+        return {
+          ip: clientIP,
+        };
+      } else {
+        return {
+          ip: null,
+        };
+      }
     });
   };
