@@ -3,11 +3,12 @@ import { Elysia, t } from "elysia";
 
 import { supabase } from "@libs/supabase";
 import { resend } from "@libs/resend";
+import { KafkaService, kafka } from "@libs/kafka";
 import { apiKey } from "@plugins/apiKey";
 
 import { httpErrorDecorator } from "@plugins/httpError";
 import { authenticateKey } from "@libs/authenticateKey";
-import { WaitlistEmail } from "@templates/waitlist-email";
+import { WaitlistEmail } from "emails/waitlist-email";
 
 type WaitlistSettings = {
   confirmation_settings: {
@@ -24,6 +25,7 @@ export const waitlist_api = (app: Elysia) =>
   app.group("/api/v1/waitlist", (app) =>
     app
       .use(httpErrorDecorator)
+      .decorate("events", new KafkaService(kafka))
       .use(apiKey()) // get api key + associated org
       .use(authenticateKey) // Validate the API key
       // Verify waitlist exists
@@ -81,7 +83,7 @@ export const waitlist_api = (app: Elysia) =>
       )
       .post(
         "/:id/join",
-        async ({ params: { id }, body, HttpError }) => {
+        async ({ params: { id }, body, HttpError, events }) => {
           const { data: waitlist_settings, error } = await supabase
             .from("waitlist_settings")
             .select("settings")
@@ -156,9 +158,9 @@ export const waitlist_api = (app: Elysia) =>
       )
       .get(
         "/:id/confirm",
-        async ({ params: { id }, query: { email }, HttpError }) => {
+        async ({ params: { id }, query: { email }, HttpError, events }) => {
           // confirm user
-          const { error } = await supabase
+          const { data: confirmed_user, error } = await supabase
             .rpc("confirm_user_referral", {
               p_email: email,
               p_waitlist_id: id,
@@ -171,8 +173,21 @@ export const waitlist_api = (app: Elysia) =>
             throw HttpError.Internal(error.message);
           }
 
+          if (!confirmed_user) {
+            console.error(error);
+            throw HttpError.NotFound("User not found.");
+          }
+
+          events.confirmed_signup(confirmed_user);
+
+          // @TODO fix types here
+          if (confirmed_user.referred) {
+            events.confirmed_referral(confirmed_user);
+          }
+
           return {
             success: !error,
+            data: confirmed_user,
           };
         },
         {

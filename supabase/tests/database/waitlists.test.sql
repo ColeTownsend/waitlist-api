@@ -30,7 +30,28 @@ $$,
 
 select
   (lives_ok ($$ insert into waitlist_settings (organization_id, waitlist_id, settings)
-        values (tests.get_organization_id ('Supabase'), '1', '{"points_per_confirmed_referral": 1, "confirmation_settings": {"automatic": false, "enable_confirmation_email": false}, "notification_settings": {"email": true}}'); $$, 'can insert waitlist settings as an admin'));
+        values (tests.get_organization_id ('Supabase'), '1', '{
+    "points_per_confirmed_referral": 1,
+    "confirmation_settings": {
+       "automatic": false,
+       "enable_confirmation_email": false
+       "custom_redirect_url": null,
+    },
+    "notification_settings": {
+      "email": true
+    },
+    "email_sender": {
+      "reply_to": null,
+      "logo": null,
+      "sender_email": null,
+      "sender_name": null
+    },
+    "user_emails": {
+      "new_signup": false,
+      "referral_confirmation": true,
+      "access_granted": true
+    }
+  }'); $$, 'can insert waitlist settings as an admin'));
 
 select
   tests.authenticate_as ('user');

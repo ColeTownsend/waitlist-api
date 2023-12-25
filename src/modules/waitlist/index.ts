@@ -4,8 +4,9 @@ import { Elysia, t } from "elysia";
 import { redis, resend, supabase } from "../../libs";
 
 import { httpErrorDecorator } from "@plugins/httpError";
-import { WaitlistEmail } from "@templates/waitlist-email";
+import WaitlistEmail from "emails/waitlist-email";
 import { WaitlistDataStore } from "@libs/cache";
+import { KafkaService, kafka } from "@libs/kafka";
 
 type WaitlistSettings = {
   confirmation_settings: {
@@ -23,6 +24,7 @@ export const waitlist = (app: Elysia) =>
     app
       .use(httpErrorDecorator)
       .decorate("cache", new WaitlistDataStore(redis))
+      .decorate("events", new KafkaService(kafka))
       .onBeforeHandle(async ({ params: { id }, set, cache }) => {
         const cachedWaitlist = await cache.getWaitlistData(id);
 
@@ -49,13 +51,14 @@ export const waitlist = (app: Elysia) =>
         "/:id",
         async ({ params: { id }, HttpError }) => {
           const { data, error } = await supabase
-            .from("waitlists")
-            .select("name, description, waitlist_signups(count), waitlist_referrals(count)")
+            .from("public_waitlists")
+            .select("*")
             .eq("id", id)
             .limit(1)
             .maybeSingle();
 
           if (error) {
+            console.error(error);
             throw HttpError.BadRequest(error.message);
           }
           if (!data) {
@@ -77,7 +80,8 @@ export const waitlist = (app: Elysia) =>
       // @TODO add some protection here like captcha + deduping + fingerprinting
       .post(
         "/:id/join",
-        async ({ params: { id }, body, HttpError }) => {
+        async ({ params: { id }, body, HttpError, events }) => {
+          console.log("Waitlist id", id);
           const { data: waitlist_settings, error } = await supabase
             .from("waitlist_settings")
             .select("settings")
@@ -86,9 +90,11 @@ export const waitlist = (app: Elysia) =>
             .maybeSingle();
 
           if (error) {
+            console.error("Error", error);
             throw HttpError.BadRequest(error.message);
           }
           if (!waitlist_settings) {
+            console.log("No data here....", waitlist_settings);
             throw HttpError.NotFound("No waitlist found");
           }
 
@@ -117,6 +123,15 @@ export const waitlist = (app: Elysia) =>
             throw HttpError.Internal("Could not join waitlist");
           }
 
+          // Kafka Events
+          events.joined_waitlist(newSignup);
+          if (settings?.confirmation_settings.automatic) {
+            events.confirmed_signup(newSignup);
+            if (newSignup.referred) {
+              events.confirmed_referral(newSignup);
+            }
+          }
+
           // @TODO Move this to a queue / background task. this is slow.
           // can use qstash https://upstash.com/docs/qstash/overall/getstarted
           // or https://github.com/bee-queue/bee-queue
@@ -128,7 +143,10 @@ export const waitlist = (app: Elysia) =>
                 subject: "Joined Waitlist",
                 // @TODO make this a url with query param to authenticate the user
                 // Do we need a redirect after that?
-                react: WaitlistEmail({ link: newSignup.confirmation_token, name: "Test User" }),
+                react: WaitlistEmail({
+                  link: `http://localhost:3000/waitlist/${id}/confirmation?token=${newSignup.confirmation_token}`,
+                  name: "Test User",
+                }),
               });
             } catch (e) {
               throw HttpError.Internal("Could not send confirmation email");

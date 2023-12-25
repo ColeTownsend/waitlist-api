@@ -281,15 +281,15 @@ export interface Database {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "waitlist_referrals_referrer_user_id_fkey"
-            columns: ["referrer_user_id"]
-            referencedRelation: "users"
+            foreignKeyName: "waitlist_referrals_waitlist_id_fkey"
+            columns: ["waitlist_id"]
+            referencedRelation: "waitlists"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "waitlist_referrals_waitlist_id_fkey"
             columns: ["waitlist_id"]
-            referencedRelation: "waitlists"
+            referencedRelation: "public_waitlists"
             referencedColumns: ["id"]
           }
         ]
@@ -324,6 +324,12 @@ export interface Database {
             foreignKeyName: "waitlist_settings_waitlist_id_fkey"
             columns: ["waitlist_id"]
             referencedRelation: "waitlists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waitlist_settings_waitlist_id_fkey"
+            columns: ["waitlist_id"]
+            referencedRelation: "public_waitlists"
             referencedColumns: ["id"]
           }
         ]
@@ -386,6 +392,12 @@ export interface Database {
             columns: ["waitlist_id"]
             referencedRelation: "waitlists"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "waitlist_signups_waitlist_id_fkey"
+            columns: ["waitlist_id"]
+            referencedRelation: "public_waitlists"
+            referencedColumns: ["id"]
           }
         ]
       }
@@ -422,7 +434,15 @@ export interface Database {
       }
     }
     Views: {
-      [_ in never]: never
+      public_waitlists: {
+        Row: {
+          count: number | null
+          description: string | null
+          id: string | null
+          name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       accept_invite_to_organization: {
@@ -450,7 +470,7 @@ export interface Database {
           p_email: string
           p_waitlist_id: string
         }
-        Returns: undefined
+        Returns: string
       }
       confirm_user_referral_with_token: {
         Args: {
@@ -473,6 +493,27 @@ export interface Database {
           org_id: number
         }
         Returns: string
+      }
+      create_waitlist_signup: {
+        Args: {
+          p_waitlist_id: string
+          p_email: string
+          p_automatic_confirmation: boolean
+          p_referral_code?: string
+        }
+        Returns: {
+          id: string
+          email: string
+          unique_share_code: string
+          organization_id: number
+          waitlist_id: string
+          referred: boolean
+          waitlist_status: Database["public"]["Enums"]["waitlist_status"]
+          joined_at: string
+          confirmed: boolean
+          confirmation_token: string
+          confirmed_at: string
+        }[]
       }
       current_user_is_member_of_organization: {
         Args: {
@@ -525,6 +566,17 @@ export interface Database {
           membership_id: number
         }
         Returns: number
+      }
+      get_waitlist: {
+        Args: {
+          p_waitlist_id: string
+        }
+        Returns: {
+          id: string
+          name: string
+          description: string
+          signups: number
+        }[]
       }
       is_claims_admin: {
         Args: Record<PropertyKey, never>

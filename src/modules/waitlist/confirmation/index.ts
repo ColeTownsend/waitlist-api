@@ -9,22 +9,8 @@ export const confirmation = (app: Elysia) =>
   app.use(httpErrorDecorator).get(
     "/waitlist/:id/confirmation",
     async ({ params: { id }, query: { token }, HttpError }) => {
-      const { data: waitlist, error: waitlistError } = await supabase
-        .from("waitlists")
-        .select("name, description, waitlist_signups(count), waitlist_referrals(count)")
-        .eq("id", id)
-        .limit(1)
-        .maybeSingle();
-
-      if (waitlistError) {
-        throw HttpError.BadRequest(waitlistError.message);
-      }
-      if (!waitlist) {
-        throw HttpError.NotFound("No waitlist found");
-      }
-
       // confirm user
-      const { data, error } = await supabase
+      const { error } = await supabase
         .rpc("confirm_user_referral_with_token", {
           p_token: token,
           p_waitlist_id: id,
@@ -37,9 +23,10 @@ export const confirmation = (app: Elysia) =>
         throw HttpError.Internal(error.message);
       }
 
+      // @todo redirect user
       return {
-        success: !!data,
-        data: data ?? null,
+        success: true,
+        data: null,
       };
     },
     {

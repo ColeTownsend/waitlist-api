@@ -1,5 +1,6 @@
 import { swagger } from "@elysiajs/swagger";
 import { Elysia, t } from "elysia";
+import { staticPlugin } from "@elysiajs/static";
 // import { serverTiming } from "@elysiajs/server-timing";
 import {
   admin,
@@ -10,14 +11,14 @@ import {
   confirmation,
 } from "./modules";
 import { httpError } from "./plugins/httpError";
-import { rateLimit } from "elysia-rate-limit";
+// import { rateLimit } from "elysia-rate-limit";
 import { initializeRealtimeListener } from "@libs/supabase";
 import { WaitlistDataStore } from "@libs/cache";
 import { redis } from "./libs";
 import { ip } from "@plugins/ip";
 
 const app = new Elysia()
-  .use(rateLimit())
+  // .use(rateLimit())
   .use(httpError())
   .use(
     swagger({
@@ -66,6 +67,7 @@ const app = new Elysia()
   .use(waitlist_api)
   .use(public_waitlist_email)
   .use(confirmation)
+  .use(staticPlugin())
   .listen(process.env.PORT || 3000);
 
 console.log(

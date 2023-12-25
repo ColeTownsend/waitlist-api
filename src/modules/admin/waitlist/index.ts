@@ -219,13 +219,33 @@ export const admin = (app: Elysia) =>
         {
           body: t.Object({
             settings: t.Object({
-              points_per_confirmed_referral: t.Number(),
+              points_per_confirmed_referral: t.Number({ minimum: 0 }),
               confirmation_settings: t.Object({
                 automatic: t.Boolean(),
                 enable_confirmation_email: t.Boolean(),
+                custom_redirect_url: t.Optional(
+                  t.Nullable(
+                    t.String({
+                      format: "url",
+                    }),
+                  ),
+                ),
               }),
               notification_settings: t.Object({
                 email: t.Boolean(),
+              }),
+              email_sender: t.Optional(
+                t.Object({
+                  reply_to: t.Optional(t.Nullable(t.String())),
+                  email_logo: t.Optional(t.Nullable(t.String())),
+                  sender_email: t.Optional(t.Nullable(t.String())),
+                  sender_name: t.Optional(t.Nullable(t.String())),
+                }),
+              ),
+              user_emails: t.Object({
+                new_signup: t.Boolean(),
+                referral_confirmation: t.Boolean(),
+                access_granted: t.Boolean(),
               }),
             }),
           }),
